@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# Lire seulement la première ligne de la variable (au cas où plusieurs fichiers sont sélectionnés)
+FULL_PATH=$(echo "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS" | head -n 1)
+
+# Vérifie si le dossier existe réellement
+if [ ! -d "$FULL_PATH" ]; then
+    zenity --error --text="Le dossier spécifié n'existe pas ou n'est pas valide : '$FULL_PATH'"
+    exit 1
+fi
+
+# Fonction pour chercher récursivement les dépôts Git et récupérer leur remote URL
+find_git_repos() {
+    local dir="$1"
+    local found_repos=""
+
+    # Recherche récursive des dossiers contenant un dossier .git
+    while IFS= read -r -d '' git_dir; do
+        repo_dir=$(dirname "$git_dir")
+        folder_name=$(basename "$repo_dir")
+
+        # Récupérer l'URL du remote origin
+        remote_url=$(git -C "$repo_dir" remote get-url origin 2>/dev/null)
+
+        if [ -n "$remote_url" ]; then
+            found_repos+="- <b>$folder_name</b> : $remote_url\n\n"
+        fi
+    done < <(find "$dir" -type d -name ".git" -print0 2>/dev/null)
+
+    # Vérifie si on a trouvé des dépôts Git
+    if [ -z "$found_repos" ]; then
+        zenity --error --text="Aucun dépôt Git trouvé dans '$dir'."
+        exit 1
+    fi
+
+    # Afficher le message avec Zenity
+    zenity --info --title="Remote Git Info" --width=600 --height=400 --no-wrap --text="$found_repos"
+}
+
+# Exécute la fonction avec le dossier sélectionné
+find_git_repos "$FULL_PATH"
+
