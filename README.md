@@ -15,7 +15,8 @@ Nautilus executes scripts via **Right-click > Scripts** and provides environment
 - `$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS` → Selected files
 - `$NAUTILUS_SCRIPT_CURRENT_URI` → Current folder
 
-[example_script_nautilus](images/example_script_nautilus.png)
+![example_script_nautilus](images/example_script_nautilus.png)
+
 
 ---
 
