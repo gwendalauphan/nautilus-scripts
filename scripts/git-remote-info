@@ -1,18 +1,23 @@
 #!/bin/bash
+# Ce script recherche récursivement les dépôts Git dans un dossier donné,
+# récupère leur URL de remote "origin" et les classe par plateforme en extrayant
+# dynamiquement le nom de la plateforme depuis l'URL.
 
 # Lire seulement la première ligne de la variable (au cas où plusieurs fichiers sont sélectionnés)
 FULL_PATH=$(echo "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS" | head -n 1)
 
-# Vérifie si le dossier existe réellement
+# Vérifier si le dossier existe réellement
 if [ ! -d "$FULL_PATH" ]; then
     zenity --error --text="Le dossier spécifié n'existe pas ou n'est pas valide : '$FULL_PATH'"
     exit 1
 fi
 
-# Fonction pour chercher récursivement les dépôts Git et récupérer leur remote URL
+# Fonction pour chercher les dépôts Git, récupérer leur remote URL et les catégoriser
 find_git_repos() {
     local dir="$1"
-    local found_repos=""
+
+    # Tableau associatif pour stocker les dépôts par catégorie
+    declare -A repos_by_category
 
     # Recherche récursive des dossiers contenant un dossier .git
     while IFS= read -r -d '' git_dir; do
@@ -22,21 +27,49 @@ find_git_repos() {
         # Récupérer l'URL du remote origin
         remote_url=$(git -C "$repo_dir" remote get-url origin 2>/dev/null)
 
-        if [ -n "$remote_url" ]; then
-            found_repos+="- <b>$folder_name</b> : $remote_url\n\n"
+        # Si aucune URL n'est trouvée, ignorer ce dépôt
+        if [ -z "$remote_url" ]; then
+            continue
         fi
+
+        # Extraire le domaine hôte depuis l'URL du remote.
+        # Cette expression sed gère les formats "git@", "http(s)://" et "ssh://git@"
+        host=$(echo "$remote_url" | sed -nE 's#^(git@|https?://|ssh://git@)([^/:]+).*#\2#p')
+        
+        # Extraire le nom de la plateforme à partir du domaine.
+        # Exemple : "github.com" donnera "github"
+        platform=$(echo "$host" | sed -E 's/^(www\.)?([^\.]+)\..*/\2/')
+        # Mettre la première lettre en majuscule (pour obtenir "Github", "Gitlab", etc.)
+        category="${platform^}"
+
+        # Ajouter le dépôt à la catégorie correspondante
+        repos_by_category["$category"]+="- <b>$folder_name</b> : $remote_url\n"
     done < <(find "$dir" -type d -name ".git" -print0 2>/dev/null)
 
-    # Vérifie si on a trouvé des dépôts Git
-    if [ -z "$found_repos" ]; then
+    # Vérifier si aucun dépôt Git n'a été trouvé
+    if [ ${#repos_by_category[@]} -eq 0 ]; then
         zenity --error --text="Aucun dépôt Git trouvé dans '$dir'."
         exit 1
     fi
 
-    # Afficher le message avec Zenity
-    zenity --info --title="Remote Git Info" --width=600 --height=400 --no-wrap --text="$found_repos"
+    # Construire le texte final à afficher en ordonnant les catégories souhaitées
+    final_output=""
+    # Ordre prédéfini pour les catégories courantes
+    for category in "Github" "Gitlab" "Gitea"; do
+        if [ -n "${repos_by_category[$category]}" ]; then
+            final_output+="<b>$category</b>\n${repos_by_category[$category]}\n"
+            unset repos_by_category["$category"]
+        fi
+    done
+
+    # Ajouter les autres catégories (non spécifiées dans l'ordre prédéfini)
+    for category in "${!repos_by_category[@]}"; do
+        final_output+="<b>$category</b>\n${repos_by_category[$category]}\n"
+    done
+
+    # Afficher le résultat avec Zenity
+    zenity --info --title="Remote Git Info" --width=600 --height=400 --no-wrap --text="$final_output"
 }
 
-# Exécute la fonction avec le dossier sélectionné
+# Exécuter la fonction avec le dossier sélectionné
 find_git_repos "$FULL_PATH"
-
