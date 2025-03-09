@@ -26,12 +26,8 @@ find_git_repos() {
 
         # Récupérer l'URL du remote origin
         remote_url=$(git -C "$repo_dir" remote get-url origin 2>/dev/null)
-
         # Si aucune URL n'est trouvée, ignorer ce dépôt
-        if [ -z "$remote_url" ]; then
-            continue
-        fi
-
+        [ -z "$remote_url" ] && continue
         # Extraire le domaine hôte depuis l'URL du remote.
         # Cette expression sed gère les formats "git@", "http(s)://" et "ssh://git@"
         host=$(echo "$remote_url" | sed -nE 's#^(git@|https?://|ssh://git@)([^/:]+).*#\2#p')
@@ -55,21 +51,46 @@ find_git_repos() {
     # Construire le texte final à afficher en ordonnant les catégories souhaitées
     final_output=""
     # Ordre prédéfini pour les catégories courantes
-    for category in "Github" "Gitlab" "Gitea"; do
-        if [ -n "${repos_by_category[$category]}" ]; then
-            final_output+="<b>$category</b>\n${repos_by_category[$category]}\n"
-            unset repos_by_category["$category"]
+    for cat_order in "Github" "Gitlab" "Gitea"; do
+        if [ -n "${repos_by_category[$cat_order]}" ]; then
+            final_output_html+="<b>$cat_order</b>\n${repos_by_category[$cat_order]}\n"
+            unset repos_by_category["$cat_order"]
         fi
     done
-
-    # Ajouter les autres catégories (non spécifiées dans l'ordre prédéfini)
-    for category in "${!repos_by_category[@]}"; do
-        final_output+="<b>$category</b>\n${repos_by_category[$category]}\n"
+    for cat in "${!repos_by_category[@]}"; do
+        final_output_html+="<b>$cat</b>\n${repos_by_category[$cat]}\n"
     done
 
-    # Afficher le résultat avec Zenity
-    zenity --info --title="Remote Git Info" --width=600 --height=400 --no-wrap --text="$final_output"
+    # Construire la version "texte simple" (pour pouvoir copier)
+    final_output_txt=$(echo -e "$final_output_html" | sed 's/<[^>]*>//g')
+
+    # --question + --extra-button => on peut personnaliser les boutons
+    # --icon-name=dialog-information => pour un look "info"
+    # --ok-label => texte sur le bouton principal
+    # --extra-button => un bouton secondaire
+    # Remarque: --no-wrap interprète le HTML (gras, etc.)
+    zenity --question \
+           --title="Remote Git Info" \
+           --icon-name=dialog-information \
+           --width=600 --height=400 \
+           --no-wrap \
+           --ok-label="Copier Url" \
+           --text="$final_output_html"
+
+    # Récupérer le code de sortie Zenity pour savoir quel bouton a été cliqué
+    ret=$?
+    # 0 => l'utilisateur a cliqué sur le bouton principal (OK)
+    # 1 => l'utilisateur a  cliqué sur le bouton "No"
+
+    if [ $ret -eq 0 ]; then
+        # Ouvre la même info dans une fenêtre copiable
+        zenity --text-info \
+               --title="Version Copiable" \
+               --editable \
+               --width=800 \
+               --height=400 \
+               --filename=<(echo -e "$final_output_txt")
+    fi
 }
 
-# Exécuter la fonction avec le dossier sélectionné
 find_git_repos "$FULL_PATH"

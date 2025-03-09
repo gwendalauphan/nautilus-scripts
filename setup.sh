@@ -24,9 +24,14 @@ for script in "$SCRIPT_DIR"/*; do
             rm "$target_link"
         fi
 
+        chmod +x -R $SCRIPT_DIR
+
         # Crée un lien symbolique
         ln -s "$script" "$target_link"
         echo "Lien créé : $target_link → $script"
+
+        # Enlever les liens symboliques vides
+        find "$NAUTILUS_SCRIPTS_DIR" -type l -xtype l -delete
     fi
 done
 
