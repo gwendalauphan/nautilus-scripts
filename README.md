@@ -66,4 +66,6 @@ Add new scripts to `scripts/` and rerun:
 
 🚀 **Enjoy your Nautilus scripts!**
 
+# Repos source
+Base: https://github.com/gwendalauphan/nautilus-scripts.git
 
